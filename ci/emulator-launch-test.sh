@@ -40,6 +40,11 @@ check_top() { # $1 = activity short name, $2 = label
 adb root || true
 sleep 2
 adb install -r "$APK" || note_fail "adb install failed"
+# Pre-grant the notification permission: MainActivity requests it on first
+# launch (API 33+) and the system dialog would otherwise sit on top of
+# MainActivity and trip the top-activity check below. This mirrors a user
+# tapping "Allow" once.
+adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
 adb logcat -c || true
 
 # --- MainActivity -----------------------------------------------------------
