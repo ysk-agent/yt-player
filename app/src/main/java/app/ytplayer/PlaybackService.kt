@@ -6,7 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.DefaultMediaNotification
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -58,12 +58,11 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player).build()
 
         setMediaNotificationProvider(
-            DefaultMediaNotification.Provider(
-                this,
-                { 1001 },
-                NOTIFICATION_CHANNEL_ID,
-                R.string.notification_channel_name
-            )
+            DefaultMediaNotificationProvider.Builder(this)
+                .setNotificationId(1001)
+                .setChannelId(NOTIFICATION_CHANNEL_ID)
+                .setChannelName(R.string.notification_channel_name)
+                .build()
         )
 
         restoreState(player)
