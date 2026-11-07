@@ -7,3 +7,6 @@ local.properties
 
 # Local build outputs handed over out-of-band
 dist/
+
+# Pinned signing keystore (registered as repo secrets; never commit)
+signing/
