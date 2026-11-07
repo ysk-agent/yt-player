@@ -46,32 +46,10 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set -x
-            adb root || true
-            sleep 2
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c || true
-            FAIL=0
-            adb shell am start -n app.ytplayer/.MainActivity
-            sleep 8
-            PID=$(adb shell pidof app.ytplayer | tr -d '\r' | tr -d '\n')
-            echo "PID after MainActivity: '$PID'"
-            if [ -z "$PID" ]; then echo "APP NOT ALIVE after MainActivity launch"; FAIL=1; fi
-            adb shell am start -n app.ytplayer/.PlayerActivity || true
-            sleep 4
-            adb shell am start -n app.ytplayer/.QueueActivity || true
-            sleep 4
-            PID2=$(adb shell pidof app.ytplayer | tr -d '\r' | tr -d '\n')
-            echo "PID at end: '$PID2'"
-            if [ -z "$PID2" ]; then echo "APP NOT ALIVE at end of script"; FAIL=1; fi
-            adb shell dumpsys activity services app.ytplayer > dumpsys-services.txt 2>&1 || true
-            adb shell dumpsys activity activities > dumpsys-activities.txt 2>&1 || true
-            adb logcat -d -v threadtime > logcat.txt 2>&1 || true
-            adb shell run-as app.ytplayer cat files/last-crash.txt > last-crash.txt 2>&1 || true
-            if grep -q "FATAL EXCEPTION" logcat.txt && grep -A3 "FATAL EXCEPTION" logcat.txt | grep -q "app.ytplayer"; then echo "FATAL EXCEPTION for app.ytplayer found in logcat"; FAIL=1; fi
-            echo "LAUNCH_TEST_FAIL=$FAIL"
-            exit $FAIL
+          # Single-line script on purpose: the runner executes multi-line
+          # inline scripts line-by-line in separate shells, which breaks
+          # variables and exit codes. The real test lives in ci/.
+          script: bash ci/emulator-launch-test.sh
 
       - name: Upload launch diagnostics
         if: always()
@@ -81,6 +59,7 @@ jobs:
           path: |
             logcat.txt
             dumpsys-services.txt
+            dumpsys-services-main.txt
             dumpsys-activities.txt
             last-crash.txt
           if-no-files-found: warn
