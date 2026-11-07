@@ -71,8 +71,14 @@ adb install -r "$APK" || note_fail "adb install failed"
 # MainActivity and trip the top-activity check below. This mirrors a user
 # tapping "Allow" once.
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
+# Capture one light-mode MainActivity screenshot first (the emulator boots
+# in light mode), so both themes are on record.
+adb shell am start -n $PKG/.MainActivity
+sleep 6
+screencap screenshot-main-light.png
+
 # Moriya's phone runs in dark mode and the app theme is DayNight, so capture
-# the screenshots in dark mode to match what he actually sees.
+# the remaining screenshots in dark mode to match what he actually sees.
 adb shell cmd uimode night yes || true
 sleep 10
 adb logcat -c || true
