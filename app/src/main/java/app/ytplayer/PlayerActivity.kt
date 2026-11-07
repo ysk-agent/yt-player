@@ -43,6 +43,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
+        InsetsHelper.applyToContentRoot(this)
         db = YtDb(this)
 
         playerView = findViewById(R.id.playerView)

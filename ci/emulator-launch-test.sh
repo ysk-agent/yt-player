@@ -50,6 +50,10 @@ adb install -r "$APK" || note_fail "adb install failed"
 # MainActivity and trip the top-activity check below. This mirrors a user
 # tapping "Allow" once.
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
+# Moriya's phone runs in dark mode and the app theme is DayNight, so capture
+# the screenshots in dark mode to match what he actually sees.
+adb shell cmd uimode night yes || true
+sleep 3
 adb logcat -c || true
 
 # --- MainActivity -----------------------------------------------------------
