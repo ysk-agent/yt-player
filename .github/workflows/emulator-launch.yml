@@ -1,0 +1,93 @@
+name: emulator-launch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK platform 35
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch app on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -x
+            adb root || true
+            sleep 2
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            adb logcat -c || true
+            FAIL=0
+            adb shell am start -n app.ytplayer/.MainActivity
+            sleep 8
+            PID=$(adb shell pidof app.ytplayer | tr -d '\r' | tr -d '\n')
+            echo "PID after MainActivity: '$PID'"
+            if [ -z "$PID" ]; then echo "APP NOT ALIVE after MainActivity launch"; FAIL=1; fi
+            adb shell am start -n app.ytplayer/.PlayerActivity || true
+            sleep 4
+            adb shell am start -n app.ytplayer/.QueueActivity || true
+            sleep 4
+            PID2=$(adb shell pidof app.ytplayer | tr -d '\r' | tr -d '\n')
+            echo "PID at end: '$PID2'"
+            if [ -z "$PID2" ]; then echo "APP NOT ALIVE at end of script"; FAIL=1; fi
+            adb shell dumpsys activity services app.ytplayer > dumpsys-services.txt 2>&1 || true
+            adb shell dumpsys activity activities > dumpsys-activities.txt 2>&1 || true
+            adb logcat -d -v threadtime > logcat.txt 2>&1 || true
+            adb shell run-as app.ytplayer cat files/last-crash.txt > last-crash.txt 2>&1 || true
+            if grep -q "FATAL EXCEPTION" logcat.txt && grep -A3 "FATAL EXCEPTION" logcat.txt | grep -q "app.ytplayer"; then echo "FATAL EXCEPTION for app.ytplayer found in logcat"; FAIL=1; fi
+            echo "LAUNCH_TEST_FAIL=$FAIL"
+            exit $FAIL
+
+      - name: Upload launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-diagnostics
+          path: |
+            logcat.txt
+            dumpsys-services.txt
+            dumpsys-activities.txt
+            last-crash.txt
+          if-no-files-found: warn
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-player-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
