@@ -69,6 +69,24 @@ Long-press a library row to enter selection mode, tap more rows, then
 **Delete selected**. Local files are deleted via the document provider where
 possible; entries are hidden (tombstoned) either way.
 
+## Diagnostics (v0.1.1)
+
+If the app "keeps stopping", the crash can be captured off-device:
+
+1. Tap **Logs folder** once and pick the `yt-player/logs` folder (in Google
+   Drive, via the Drive document provider in the system picker). The app keeps
+   only the folder permission — no Google credentials.
+2. Use the app and reproduce the crash.
+3. Open the app once more. On startup it automatically exports the previous
+   crash to the logs folder as `ytplayer-log-<timestamp>.txt` (device model,
+   Android/app version, the full stack trace, recent caught errors, and a
+   library state summary). **Export logs now** does the same on demand.
+4. Tell Muse — the log can be read straight from Drive.
+
+The last crash's time and exception also appear at the top of the library
+screen when one has been recorded. Caught subsystem failures in the playback
+service are written to an on-device `errors.log` and included in the export.
+
 ## NOT in v0.1
 
 - yt-dlp backend integration (no resolve endpoint yet — stream items use

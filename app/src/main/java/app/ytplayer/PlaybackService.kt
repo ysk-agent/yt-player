@@ -31,41 +31,74 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        db = YtDb(this)
+        // Diagnostics build (v0.1.1): each subsystem is guarded separately so a
+        // failure is recorded to errors.log instead of silently crash-looping
+        // the foreground service, which Android surfaces only as "keeps
+        // stopping". A FATAL in (a) or (b) leaves the service up but useless;
+        // the recorded line is what tells us which one it was.
+        try {
+            db = YtDb(this)
+        } catch (t: Throwable) {
+            ErrLog.record(this, "service-db FATAL", t)
+            return
+        }
 
-        val player = ExoPlayer.Builder(this).build()
-        player.addListener(object : Player.Listener {
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val id = mediaItem?.mediaId?.toLongOrNull() ?: return
-                db.notePlayStarted(id)
-                persistIndex()
+        // (a) Player + listener.
+        val player = try {
+            ExoPlayer.Builder(this).build().also { built ->
+                built.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        val id = mediaItem?.mediaId?.toLongOrNull() ?: return
+                        db.notePlayStarted(id)
+                        persistIndex()
+                    }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        if (state == Player.STATE_ENDED) {
+                            currentVideoId()?.let { db.markPlayed(it) }
+                        }
+                        if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
+                            persistProgress()
+                        }
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (!isPlaying) persistProgress()
+                    }
+                })
             }
+        } catch (t: Throwable) {
+            ErrLog.record(this, "service-player FATAL", t)
+            return
+        }
 
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) {
-                    currentVideoId()?.let { db.markPlayed(it) }
-                }
-                if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
-                    persistProgress()
-                }
-            }
+        // (b) Media session.
+        try {
+            mediaSession = MediaSession.Builder(this, player).build()
+        } catch (t: Throwable) {
+            ErrLog.record(this, "service-session FATAL", t)
+            return
+        }
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying) persistProgress()
-            }
-        })
+        // (c) Media notification provider.
+        try {
+            setMediaNotificationProvider(
+                DefaultMediaNotificationProvider.Builder(this)
+                    .setNotificationId(1001)
+                    .setChannelId(NOTIFICATION_CHANNEL_ID)
+                    .setChannelName(R.string.notification_channel_name)
+                    .build()
+            )
+        } catch (t: Throwable) {
+            ErrLog.record(this, "service-notification", t)
+        }
 
-        mediaSession = MediaSession.Builder(this, player).build()
-
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setNotificationId(1001)
-                .setChannelId(NOTIFICATION_CHANNEL_ID)
-                .setChannelName(R.string.notification_channel_name)
-                .build()
-        )
-
-        restoreState(player)
+        // (d) State restore (queue / position / speed from SQLite).
+        try {
+            restoreState(player)
+        } catch (t: Throwable) {
+            ErrLog.record(this, "service-restore", t)
+        }
         handler.postDelayed(saveRunnable, SAVE_INTERVAL_MS)
     }
 

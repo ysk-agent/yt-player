@@ -135,6 +135,15 @@ class YtDb(context: Context) : SQLiteOpenHelper(context, "ytplayer.db", null, 1)
         return out
     }
 
+    /** Count of non-deleted videos, optionally filtered by status (diagnostics summary). */
+    fun countVisible(status: String?): Int {
+        val where = if (status == null) "deleted_at IS NULL"
+        else "deleted_at IS NULL AND status=?"
+        val args = if (status == null) null else arrayOf(status)
+        readableDatabase.query("videos", arrayOf("COUNT(*)"), where, args, null, null, null)
+            .use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
     fun setDuration(id: Long, durationMs: Long) {
         if (durationMs <= 0) return
         writableDatabase.execSQL(

@@ -43,6 +43,24 @@ class MainActivity : AppCompatActivity() {
 
     private val io = Executors.newSingleThreadExecutor()
 
+    private val openLogsTree = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            try {
+                contentResolver.takePersistableUriPermission(uri, flags)
+            } catch (e: Exception) {
+                ErrLog.record(this, "logs-folder-permission", e)
+            }
+            LogExport.setTreeUri(this, uri)
+            Toast.makeText(
+                this, "Logs folder set — exports will land there", Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     private val openTree = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -78,6 +96,24 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, QueueActivity::class.java))
         }
         findViewById<Button>(R.id.btnDeleteSelected).setOnClickListener { deleteSelected() }
+        findViewById<Button>(R.id.btnLogsFolder).setOnClickListener {
+            openLogsTree.launch(null)
+        }
+        findViewById<Button>(R.id.btnExportLogs).setOnClickListener {
+            Toast.makeText(this, "Exporting logs…", Toast.LENGTH_SHORT).show()
+            io.execute {
+                val reached = LogExport.export(this)
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        if (reached) "Logs exported to the logs folder"
+                        else "Logs exported locally (pick a logs folder to send them to Drive)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    showDiagnostics()
+                }
+            }
+        }
 
         findViewById<ChipGroup>(R.id.filterChips).setOnCheckedChangeListener { _, checkedId ->
             currentFilter = when (checkedId) {
@@ -123,6 +159,30 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::db.isInitialized) reload()
+        showDiagnostics()
+    }
+
+    /** Diagnostics block: if a previous crash was persisted, surface its first
+     *  lines here so it is visible even before any export happens. */
+    private fun showDiagnostics() {
+        val view = findViewById<TextView>(R.id.diagText) ?: return
+        val crash = try {
+            ErrLog.readCrash(this)
+        } catch (t: Throwable) {
+            null
+        }
+        if (crash.isNullOrBlank()) {
+            view.visibility = View.GONE
+            return
+        }
+        val lines = crash.lines()
+        val time = lines.firstOrNull { it.startsWith("time:") }?.removePrefix("time: ") ?: "?"
+        val exceptionLine = lines.firstOrNull {
+            it.contains("Exception") || it.contains("Error")
+        } ?: lines.firstOrNull() ?: ""
+        view.text = "Last crash: $time\n$exceptionLine\n" +
+            "(full trace is exported with the logs)"
+        view.visibility = View.VISIBLE
     }
 
     private fun reload() {
