@@ -4,3 +4,6 @@ app/build/
 local.properties
 *.iml
 .idea/
+
+# Local build outputs handed over out-of-band
+dist/
