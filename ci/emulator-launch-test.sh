@@ -37,6 +37,11 @@ check_top() { # $1 = activity short name, $2 = label
   fi
 }
 
+screencap() { # $1 = output png name
+  adb exec-out screencap -p > "$1" 2>/dev/null || adb shell screencap -p "/sdcard/$1" && adb pull "/sdcard/$1" "$1" >/dev/null 2>&1
+  if [ -s "$1" ]; then echo "screenshot saved: $1 ($(stat -c%s "$1") bytes)"; else echo "WARNING: screenshot $1 empty/missing"; fi
+}
+
 adb root || true
 sleep 2
 adb install -r "$APK" || note_fail "adb install failed"
@@ -54,6 +59,7 @@ PID=$(adb shell pidof $PKG | tr -d '\r\n')
 echo "PID after MainActivity: '$PID'"
 [ -n "$PID" ] || note_fail "app process not alive after MainActivity launch"
 check_top MainActivity "MainActivity launch"
+screencap screenshot-main.png
 
 adb shell dumpsys activity services $PKG > dumpsys-services-main.txt 2>&1 || true
 if grep -q "PlaybackService" dumpsys-services-main.txt; then
@@ -66,11 +72,13 @@ fi
 adb shell am start -n $PKG/.PlayerActivity
 sleep 4
 check_top PlayerActivity "PlayerActivity launch"
+screencap screenshot-player.png
 
 # --- QueueActivity ----------------------------------------------------------
 adb shell am start -n $PKG/.QueueActivity
 sleep 4
 check_top QueueActivity "QueueActivity launch"
+screencap screenshot-queue.png
 
 PID2=$(adb shell pidof $PKG | tr -d '\r\n')
 echo "PID at end: '$PID2'"

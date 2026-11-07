@@ -62,6 +62,9 @@ jobs:
             dumpsys-services-main.txt
             dumpsys-activities.txt
             last-crash.txt
+            screenshot-main.png
+            screenshot-player.png
+            screenshot-queue.png
           if-no-files-found: warn
 
       - name: Upload APK
