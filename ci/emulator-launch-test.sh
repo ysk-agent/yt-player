@@ -37,7 +37,28 @@ check_top() { # $1 = activity short name, $2 = label
   fi
 }
 
+dismiss_anr() {
+  # A system "app isn't responding" dialog (in practice the launcher ANR-ing
+  # after the dark-mode switch on the emulator) would otherwise sit on top of
+  # every screenshot. If one is present, tap its "Wait" button.
+  adb shell uiautomator dump /sdcard/window_dump.xml >/dev/null 2>&1 || return 0
+  adb pull /sdcard/window_dump.xml window_dump.xml >/dev/null 2>&1 || return 0
+  grep -q "isn't responding" window_dump.xml || return 0
+  local node bounds nums
+  node=$(grep -o 'text="Wait"[^>]*' window_dump.xml | head -1)
+  bounds=$(echo "$node" | grep -o 'bounds="\[[0-9,]*\]\[[0-9,]*\]"' | head -1)
+  nums=$(echo "$bounds" | grep -o '[0-9]\+')
+  set -- $nums
+  if [ $# -eq 4 ]; then
+    local cx=$(( ($1 + $3) / 2 )) cy=$(( ($2 + $4) / 2 ))
+    echo "ANR dialog detected; tapping 'Wait' at $cx,$cy"
+    adb shell input tap "$cx" "$cy" || true
+    sleep 2
+  fi
+}
+
 screencap() { # $1 = output png name
+  dismiss_anr
   adb exec-out screencap -p > "$1" 2>/dev/null || adb shell screencap -p "/sdcard/$1" && adb pull "/sdcard/$1" "$1" >/dev/null 2>&1
   if [ -s "$1" ]; then echo "screenshot saved: $1 ($(stat -c%s "$1") bytes)"; else echo "WARNING: screenshot $1 empty/missing"; fi
 }
@@ -53,7 +74,7 @@ adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS || true
 # Moriya's phone runs in dark mode and the app theme is DayNight, so capture
 # the screenshots in dark mode to match what he actually sees.
 adb shell cmd uimode night yes || true
-sleep 3
+sleep 10
 adb logcat -c || true
 
 # --- MainActivity -----------------------------------------------------------
