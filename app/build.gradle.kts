@@ -11,8 +11,8 @@ android {
         applicationId = "app.ytplayer"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
     }
 
     // Pinned signing key: CI decodes the keystore from the SIGNING_KEYSTORE_B64
